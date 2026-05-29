@@ -9,8 +9,8 @@ $Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/r
 New-Item -ItemType Directory -Path "$BUILD_DIR", "$BUILD_DIR\conf", "$STAGE_DIR\bin", "$STAGE_DIR\data", "$BUILD_DIR\scripts" -Force
 
 # 3. Download and extract the downloaded server zip
-Invoke-WebRequest -Uri $Url -OutFile "HOME\Desktop\rustdesk-server-linux-amd64.zip"
-$ZipFile = Get-ChildItem "$CURRENT_DIR\rustdesk-server-linux-amd64.zip" | Select-Object -First 1 -ExpandProperty FullName
+Invoke-WebRequest -Uri $Url -OutFile "$BUILD_DIR\rustdesk-server-linux-amd64.zip"
+$ZipFile = Get-ChildItem "$BUILD_DIR\rustdesk-server-linux-amd64.zip" | Select-Object -First 1 -ExpandProperty FullName
 Expand-Archive -Path $ZipFile -DestinationPath "$BUILD_DIR\extracted" -Force
 
 # 4. Move binaries to the staging zone
