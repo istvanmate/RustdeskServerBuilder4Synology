@@ -85,12 +85,13 @@ $UiConfig = @'
 $CgiContent = @'
 #!/bin/sh
 
-if ! /usr/syno/synoman/webman/modules/authenticate.cgi > /dev/null 2>&1; then
-    echo "Status: 403 Forbidden"
-    echo ""
-    echo "Access denied"
-    exit 1
-fi
+#not working
+#if ! /usr/syno/synoman/webman/modules/authenticate.cgi > /dev/null 2>&1; then
+#    echo "Status: 403 Forbidden"
+#    echo ""
+#    echo "Access denied"
+#    exit 1
+#fi
 
 echo "Content-Type: text/html"
 echo ""
