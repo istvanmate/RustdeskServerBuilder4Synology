@@ -200,5 +200,6 @@ if (Test-Path "$BUILD_DIR\PACKAGE_ICON.PNG") {
 }
 
 # Cleanup temporary build components
+cd $CURRENT_DIR
 Remove-Item "$BUILD_DIR" -Recurse -Force
 Write-Host "Success! Upload your updated $version package to your NAS: rustdesk_server.spk" -ForegroundColor Green
