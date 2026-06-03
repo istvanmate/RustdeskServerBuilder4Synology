@@ -82,6 +82,7 @@ $UiConfig = @'
 '@
 [System.IO.File]::WriteAllText("$STAGE_DIR\ui\config", $UiConfig.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
+# 11. Generate index.cgi interface view panel
 $CgiContent = @'
 #!/bin/sh
 
@@ -169,7 +170,7 @@ EOF
 
 if (Test-Path "$CURRENT_DIR\PACKAGE_ICON.PNG") { Copy-Item "$CURRENT_DIR\PACKAGE_ICON.PNG" -Destination "$STAGE_DIR\ui\images\icon_72.png" -Force}
 
-# 10. Generate Management Pipeline Hooks (start-stop-status) with strict LF endings
+# 12. Generate Management Pipeline Hooks (start-stop-status) with strict LF endings
 $ScriptContent = @'
 #!/bin/sh
 PKG_DIR="/var/packages/rustdesk_server/target"
@@ -197,7 +198,7 @@ esac
 '@
 [System.IO.File]::WriteAllText("$BUILD_DIR\scripts\start-stop-status", $ScriptContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-# 11. Assemble Package
+# 13. Assemble Package
 cd $STAGE_DIR
 tar -czf "$BUILD_DIR\package.tgz" bin data ui
 
