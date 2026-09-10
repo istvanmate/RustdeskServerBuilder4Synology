@@ -1,31 +1,35 @@
-# 1. Initialize Paths
+# ============================================================
+# RustDesk Server - Working floating window (800x600)
+# ============================================================
+
 $CURRENT_DIR = $PSScriptRoot
-$BUILD_DIR = "$CURRENT_DIR\rustdesk-build"
-$STAGE_DIR = "$BUILD_DIR\stage"
-$version = "1.1.15"
+$BUILD_DIR = Join-Path $CURRENT_DIR "rustdesk-build"
+$STAGE_DIR = Join-Path $BUILD_DIR "stage"
+$CACHE_DIR = Join-Path $CURRENT_DIR ".cache"
+$version = "1.1.16"
 $Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/rustdesk-server-linux-amd64.zip"
 
-# 2. Establish Workspaces
-New-Item -ItemType Directory -Path "$BUILD_DIR", "$BUILD_DIR\conf", "$STAGE_DIR\bin", "$STAGE_DIR\data", "$BUILD_DIR\scripts", "$STAGE_DIR\ui", "$STAGE_DIR\ui\images" -Force
+New-Item -ItemType Directory -Path "$BUILD_DIR", $CACHE_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
 
-# 3. Download and extract the downloaded server zip
-Invoke-WebRequest -Uri $Url -OutFile "$BUILD_DIR\rustdesk-server-linux-amd64.zip"
-$ZipFile = Get-ChildItem "$BUILD_DIR\rustdesk-server-linux-amd64.zip" | Select-Object -First 1 -ExpandProperty FullName
-Expand-Archive -Path $ZipFile -DestinationPath "$BUILD_DIR\extracted" -Force
+Write-Host "Downloading RustDesk Server $version ..." -ForegroundColor Cyan
+if (-Not (Test-Path (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip"))) {
+    Write-Host "Downloading from $Url ..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $Url -OutFile (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip")
+} else {
+    Write-Host "Using cached file." -ForegroundColor Green
+}
+$ZipFile = Get-ChildItem (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip") | Select-Object -First 1 -ExpandProperty FullName
+Expand-Archive -Path $ZipFile -DestinationPath (Join-Path $BUILD_DIR "extracted") -Force
 
-# 4. Move binaries to the staging zone
-$ArchDir = Get-ChildItem "$BUILD_DIR\extracted" -Directory | Select-Object -First 1 -ExpandProperty FullName
-Move-Item "$ArchDir\hbbs", "$ArchDir\hbbr" -Destination "$STAGE_DIR\bin\" -Force
+$ArchDir = Get-ChildItem (Join-Path $BUILD_DIR "extracted") -Directory | Select-Object -First 1 -ExpandProperty FullName
+Move-Item (Join-Path $ArchDir "hbbs"), (Join-Path $ArchDir "hbbr") -Destination (Join-Path $STAGE_DIR "bin") -Force
 
-# 5. Inject your Desktop cryptographic keys
-if (Test-Path "$CURRENT_DIR\id_ed25519") { Copy-Item "$CURRENT_DIR\id_ed25519" -Destination "$STAGE_DIR\data\" -Force }
-if (Test-Path "$CURRENT_DIR\id_ed25519.pub") { Copy-Item "$CURRENT_DIR\id_ed25519.pub" -Destination "$STAGE_DIR\data\" -Force }
+if (Test-Path (Join-Path $CURRENT_DIR "id_ed25519")) { Copy-Item (Join-Path $CURRENT_DIR "id_ed25519") -Destination (Join-Path $STAGE_DIR "data") -Force }
+if (Test-Path (Join-Path $CURRENT_DIR "id_ed25519.pub")) { Copy-Item (Join-Path $CURRENT_DIR "id_ed25519.pub") -Destination (Join-Path $STAGE_DIR "data") -Force }
 
-# 6. Transfer Icons if present
-if (Test-Path "$CURRENT_DIR\PACKAGE_ICON.PNG") { Copy-Item "$CURRENT_DIR\PACKAGE_ICON.PNG" -Destination "$BUILD_DIR\" -Force }
-if (Test-Path "$CURRENT_DIR\PACKAGE_ICON_256.PNG") { Copy-Item "$CURRENT_DIR\PACKAGE_ICON_256.PNG" -Destination "$BUILD_DIR\" -Force }
+if (Test-Path (Join-Path $CURRENT_DIR "PACKAGE_ICON.PNG")) { Copy-Item (Join-Path $CURRENT_DIR "PACKAGE_ICON.PNG") -Destination $BUILD_DIR -Force }
+if (Test-Path (Join-Path $CURRENT_DIR "PACKAGE_ICON_256.PNG")) { Copy-Item (Join-Path $CURRENT_DIR "PACKAGE_ICON_256.PNG") -Destination $BUILD_DIR -Force }
 
-# 7. Build Configuration Text (INFO)
 $InfoContent = @"
 package="rustdesk_server"
 version="$version"
@@ -37,13 +41,12 @@ maintainer="Self"
 distributor="RustDesk Community"
 startable="yes"
 support_center="yes"
+thirdparty="yes"
 dsmuidir="ui"
-dsmappname="SYNO.SDS.RustDeskServer"
+dsmappname="SYNOCOMMUNITY.RustDeskServer.AppInstance"
 "@
-[System.IO.File]::WriteAllText("$BUILD_DIR\INFO", $InfoContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "INFO"), $InfoContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-
-# 8. Create DSM 7 Privilege Profile Configuration File inside conf/
 $PrivilegeContent = @"
 {
   "defaults": {
@@ -54,162 +57,186 @@ $PrivilegeContent = @"
   "join-group": "http"
 }
 "@
-[System.IO.File]::WriteAllText("$BUILD_DIR\conf\privilege", $PrivilegeContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "conf" "privilege"), $PrivilegeContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-# 9. FIXED LOGIC: Generate Post-installer Hook (postinst) to change permissions AFTER extraction
-$PostinstContent = "#!/bin/sh`n" +
-"chmod +x /var/packages/rustdesk_server/target/bin/hbbs`n" +
-"chmod +x /var/packages/rustdesk_server/target/bin/hbbr`n" +
-"chmod +x /var/packages/rustdesk_server/target/ui/index.cgi`n" +
-"chown -R sc-rustdesk:sc-rustdesk /var/packages/rustdesk_server/target/data`n" +
-"exit 0"
-[System.IO.File]::WriteAllText("$BUILD_DIR\scripts\postinst", $PostinstContent, (New-Object System.Text.UTF8Encoding($false)))
+$PostinstContent = @"
+#!/bin/sh
+chmod +x /var/packages/rustdesk_server/target/bin/hbbs
+chmod +x /var/packages/rustdesk_server/target/bin/hbbr
+chmod +x /var/packages/rustdesk_server/target/ui/index.cgi
+chown -R sc-rustdesk:sc-rustdesk /var/packages/rustdesk_server/target/data
 
-# 10. Generate UI
+rm -f /var/packages/rustdesk_server/target/ui/ui
+rm -rf /usr/syno/synoman/webman/3rdparty/rustdesk_server
+ln -sf /var/packages/rustdesk_server/target/ui /usr/syno/synoman/webman/3rdparty/rustdesk_server
+chmod -R 755 /var/packages/rustdesk_server/target/ui
+chown -R root:root /var/packages/rustdesk_server/target/ui
+exit 0
+"@
+[System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "scripts" "postinst"), $PostinstContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+
 $UiConfig = @'
 {
-    ".url": {
-        "SYNO.SDS.RustDeskServer": {
-            "title": "RustDesk Server",
-            "desc": "RustDesk Server Administration",
-            "icon": "images/icon_72.png",
-            "type": "legacy",
-            "url": "/webman/3rdparty/rustdesk_server/index.cgi",
-            "allUsers": true
+    "dsm-wrapper.js": {
+        "SYNOCOMMUNITY.RustDeskServer.AppInstance": {
+            "type": "app",
+            "title": "app:app_name",
+            "version": "1.0",
+            "icon": "images/icon_{0}.png",
+            "texts": "texts",
+            "allowMultiInstance": false,
+            "allUsers": true,
+            "appWindow": "SYNOCOMMUNITY.RustDeskServer.AppWindow",
+            "depend": ["SYNOCOMMUNITY.RustDeskServer.AppWindow"]
+        },
+        "SYNOCOMMUNITY.RustDeskServer.AppWindow": {
+            "type": "lib",
+            "title": "app:app_name",
+            "icon": "images/icon_{0}.png",
+            "texts": "texts"
         }
     }
 }
 '@
-[System.IO.File]::WriteAllText("$STAGE_DIR\ui\config", $UiConfig.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $STAGE_DIR "ui" "config"), $UiConfig.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-# 11. Generate index.cgi interface view panel
+$IndexConf = @'
+{
+    "app": "SYNOCOMMUNITY.RustDeskServer.AppInstance",
+    "title": "app:app_name",
+    "desc": "app:description",
+    "stringset": "texts",
+    "keywords": [
+        "rustdesk",
+        "RustDesk Server"
+    ]
+}
+'@
+[System.IO.File]::WriteAllText((Join-Path $STAGE_DIR "ui" "index.conf"), $IndexConf.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+
+$AppJs = @'
+Ext.ns("SYNOCOMMUNITY.RustDeskServer");
+
+Ext.define("SYNOCOMMUNITY.RustDeskServer.AppInstance", {
+    extend: "SYNO.SDS.AppInstance",
+    appWindowName: "SYNOCOMMUNITY.RustDeskServer.AppWindow",
+    constructor: function () {
+        this.callParent(arguments);
+    }
+});
+
+Ext.define("SYNOCOMMUNITY.RustDeskServer.AppWindow", {
+    extend: "SYNO.SDS.AppWindow",
+    constructor: function (config) {
+        const appConfig = Ext.apply({
+            resizable: true,
+            maximizable: true,
+            minimizable: true,
+            width: 800,
+            height: 600,
+            minWidth: 600,
+            minHeight: 450,
+            layout: "fit",
+            border: false,
+            title: "RustDesk Server",
+            items: [{
+                xtype: "box",
+                itemId: "appframe",
+                autoEl: {
+                    tag: "iframe",
+                    src: "/webman/3rdparty/rustdesk_server/index.cgi",
+                    frameborder: "0",
+                    style: "width:100%; height:100%; border:none;"
+                }
+            }]
+        }, config);
+        this.callParent([appConfig]);
+    },
+    onOpen: function (config) {
+        this.callParent([config]);
+    },
+    onRequest: function (config) {
+        this.onOpen(config);
+    }
+});
+'@
+[System.IO.File]::WriteAllText((Join-Path $STAGE_DIR "ui" "dsm-wrapper.js"), $AppJs.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+
+$Strings = @'
+[app]
+app_name="RustDesk Server"
+description="RustDesk Server Administration"
+'@
+[System.IO.File]::WriteAllText((Join-Path $STAGE_DIR "ui" "texts" "enu" "strings"), $Strings.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+
 $CgiContent = @'
 #!/bin/sh
-
-#not working
-#if ! /usr/syno/synoman/webman/modules/authenticate.cgi > /dev/null 2>&1; then
-#    echo "Status: 403 Forbidden"
-#    echo ""
-#    echo "Access denied"
-#    exit 1
-#fi
-
+if [ -z "$HTTP_COOKIE" ] || ! echo "$HTTP_COOKIE" | grep -qE '(id=|synoToken=|SESS_)'; then
+    echo "Status: 403 Forbidden"
+    echo "Content-Type: text/html"
+    echo ""
+    echo "<html><body style='font-family:sans-serif;padding:40px'><h2>Access denied</h2><p>Please log in to DSM first.</p></body></html>"
+    exit 1
+fi
 echo "Content-Type: text/html"
 echo ""
-
 KEY_FILE="/var/packages/rustdesk_server/target/data/id_ed25519.pub"
-
-if [ -f "$KEY_FILE" ]; then
-    KEY=$(cat "$KEY_FILE")
+if [ -f "$KEY_FILE" ]; then KEY=$(cat "$KEY_FILE"); else KEY="Key not generated yet."; fi
+if pidof hbbs > /dev/null 2>&1 && pidof hbbr > /dev/null 2>&1; then
+    STATUS_TEXT="Running"; STATUS_CLASS="status-running"
 else
-    KEY="Key not generated yet."
+    STATUS_TEXT="Stopped"; STATUS_CLASS="status-stopped"
 fi
-
 cat <<EOF
-<html>
-<head>
-<meta charset="utf-8">
-<title>RustDesk Server</title>
-
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>RustDesk Server</title>
 <style>
-body {
-    font-family: sans-serif;
-    margin: 40px;
-    background: #f5f5f5;
-}
-
-.card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    max-width: 900px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-}
-
-pre {
-    background: #efefef;
-    padding: 15px;
-    border-radius: 8px;
-    overflow-x: auto;
-}
-
-.status {
-    color: green;
-    font-weight: bold;
-}
-</style>
-</head>
-
-<body>
-
-<div class="card">
-    <h1>RustDesk Server</h1>
-
-    <p class="status">Running</p>
-
-    <h2>Public Key</h2>
-
-    <pre>$KEY</pre>
-
-    <h2>Server Ports</h2>
-
-    <ul>
-        <li>21115/TCP</li>
-        <li>21116/TCP+UDP</li>
-        <li>21117/TCP</li>
-        <li>21118/TCP</li>
-        <li>21119/TCP</li>
-    </ul>
-</div>
-
-</body>
-</html>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0px;padding:24px;background:#f0f2f5}
+pre{background:#f6f8fa;padding:14px;border-radius:8px;overflow-x:auto;font-size:13px;border:1px solid #e1e4e8}
+.status-running{color:#1a7f37;font-weight:600;font-size:16px}
+.status-stopped{color:#cf222e;font-weight:600;font-size:16px}
+h1{margin-top:0} h2{margin-top:24px} ul{line-height:1.7}
+</style></head><body>
+<h1>RustDesk Server</h1>
+<p class="$STATUS_CLASS">$STATUS_TEXT</p>
+<h2>Public Key</h2>
+<pre>$KEY</pre>
+<h2>Server Ports</h2>
+<ul><li>21115 / TCP</li><li>21116 / TCP + UDP</li><li>21117 / TCP</li><li>21118 / TCP</li><li>21119 / TCP</li></ul>
+</body></html>
 EOF
 '@
-[System.IO.File]::WriteAllText("$STAGE_DIR\ui\index.cgi", $CgiContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $STAGE_DIR "ui" "index.cgi"), $CgiContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-if (Test-Path "$CURRENT_DIR\PACKAGE_ICON.PNG") { Copy-Item "$CURRENT_DIR\PACKAGE_ICON.PNG" -Destination "$STAGE_DIR\ui\images\icon_72.png" -Force}
+foreach ($size in @(16,24,32,48,64,72,256)) {
+    #Copy-Item (Join-Path $CURRENT_DIR "icon_$size.png") -Destination (Join-Path $STAGE_DIR "ui" "images" "icon_$size.png") -Force
+    [System.IO.File]::WriteAllBytes((Join-Path $STAGE_DIR "ui" "images" "icon_$size.png"), [System.IO.File]::ReadAllBytes((Join-Path $CURRENT_DIR "icon_$size.png")))
+}
 
-# 12. Generate Management Pipeline Hooks (start-stop-status) with strict LF endings
 $ScriptContent = @'
 #!/bin/sh
 PKG_DIR="/var/packages/rustdesk_server/target"
 BIN_DIR="${PKG_DIR}/bin"
 DATA_DIR="${PKG_DIR}/data"
-
 case "$1" in
-    start)
-        cd "${DATA_DIR}"
-        "${BIN_DIR}/hbbs" -r 0.0.0.0 > /dev/null 2>&1 &
-        "${BIN_DIR}/hbbr" > /dev/null 2>&1 &
-        exit 0
-        ;;
-    stop)
-        killall hbbs hbbr
-        exit 0
-        ;;
-    status)
-        if pidof hbbs > /dev/null && pidof hbbr > /dev/null; then exit 0; else exit 3; fi
-        ;;
-    *)
-        exit 1
-        ;;
+    start) cd "${DATA_DIR}"; "${BIN_DIR}/hbbs" -r 0.0.0.0 > /dev/null 2>&1 & "${BIN_DIR}/hbbr" > /dev/null 2>&1 & exit 0 ;;
+    stop) killall hbbs hbbr 2>/dev/null; exit 0 ;;
+    status) if pidof hbbs > /dev/null 2>&1 && pidof hbbr > /dev/null 2>&1; then exit 0; else exit 3; fi ;;
+    *) exit 1 ;;
 esac
 '@
-[System.IO.File]::WriteAllText("$BUILD_DIR\scripts\start-stop-status", $ScriptContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "scripts" "start-stop-status"), $ScriptContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-# 13. Assemble Package
-cd $STAGE_DIR
-tar -czf "$BUILD_DIR\package.tgz" bin data ui
-
-cd $BUILD_DIR
-if (Test-Path "$BUILD_DIR\PACKAGE_ICON.PNG") {
-    tar -cf "$CURRENT_DIR\rustdesk_server.spk" INFO conf package.tgz scripts PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
-} else {
-    tar -cf "$CURRENT_DIR\rustdesk_server.spk" INFO conf package.tgz scripts
-}
-
-# Cleanup temporary build components
-cd $CURRENT_DIR
+Set-Location $STAGE_DIR
+tar -czf (Join-Path $BUILD_DIR "package.tgz") bin data ui
+Set-Location $BUILD_DIR
+$spkFiles = @("INFO", "conf", "package.tgz", "scripts")
+if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON.PNG")) { $spkFiles += "PACKAGE_ICON.PNG" }
+if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON_256.PNG")) { $spkFiles += "PACKAGE_ICON_256.PNG" }
+tar -cf (Join-Path $CURRENT_DIR "rustdesk_server.spk") $spkFiles
+Set-Location $CURRENT_DIR
 Remove-Item "$BUILD_DIR" -Recurse -Force
-Write-Host "Success! Upload your updated $version package to your NAS: rustdesk_server.spk" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Success! Package created." -ForegroundColor Green
+Write-Host ""
