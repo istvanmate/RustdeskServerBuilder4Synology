@@ -1,15 +1,12 @@
-# ============================================================
-# RustDesk Server - Working floating window (800x600)
-# ============================================================
-
 $CURRENT_DIR = $PSScriptRoot
 $BUILD_DIR = Join-Path $CURRENT_DIR "rustdesk-build"
 $STAGE_DIR = Join-Path $BUILD_DIR "stage"
 $CACHE_DIR = Join-Path $CURRENT_DIR ".cache"
+$RELEASE_DIR = Join-Path $CURRENT_DIR "release"
 $version = "1.1.16"
 $Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/rustdesk-server-linux-amd64.zip"
 
-New-Item -ItemType Directory -Path "$BUILD_DIR", $CACHE_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
+New-Item -ItemType Directory -Path $RELEASE_DIR, $BUILD_DIR, $CACHE_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
 
 Write-Host "Downloading RustDesk Server $version ..." -ForegroundColor Cyan
 if (-Not (Test-Path (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip"))) {
@@ -233,7 +230,7 @@ Set-Location $BUILD_DIR
 $spkFiles = @("INFO", "conf", "package.tgz", "scripts")
 if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON.PNG")) { $spkFiles += "PACKAGE_ICON.PNG" }
 if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON_256.PNG")) { $spkFiles += "PACKAGE_ICON_256.PNG" }
-tar -cf (Join-Path $CURRENT_DIR "rustdesk_server.spk") $spkFiles
+tar -cf (Join-Path $RELEASE_DIR "rustdesk_server.spk") $spkFiles
 Set-Location $CURRENT_DIR
 Remove-Item "$BUILD_DIR" -Recurse -Force
 
