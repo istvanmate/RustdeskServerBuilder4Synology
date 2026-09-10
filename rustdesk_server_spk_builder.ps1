@@ -1,7 +1,7 @@
 $CURRENT_DIR = $PSScriptRoot
 $BUILD_DIR = Join-Path $CURRENT_DIR "rustdesk-build"
 $STAGE_DIR = Join-Path $BUILD_DIR "stage"
-$CACHE_DIR = Join-Path $CURRENT_DIR ".cache"
+$ZIP_DIR = Join-Path $BUILD_DIR "zip"
 $RELEASE_DIR = Join-Path $CURRENT_DIR "release"
 $version = "1.1.16"
 $platforms = @("amd64", "arm64v8", "armv7", "i386")
@@ -12,19 +12,19 @@ $arch = @{
     i386=@("Evansport")
 }
 
-New-Item -ItemType Directory -Path $RELEASE_DIR, $BUILD_DIR, $CACHE_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
+New-Item -ItemType Directory -Path $RELEASE_DIR, $BUILD_DIR, $ZIP_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
 
 foreach ($platform in $platforms) {
     $Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/rustdesk-server-linux-$platform.zip"
-    if (-Not (Test-Path (Join-Path $CACHE_DIR "rustdesk-server-linux-$platform.zip"))) {
+    if (-Not (Test-Path (Join-Path $ZIP_DIR "rustdesk-server-linux-$platform.zip"))) {
         Write-Host "Downloading from $Url ..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri $Url -OutFile (Join-Path $CACHE_DIR "rustdesk-server-linux-$platform.zip")
+        Invoke-WebRequest -Uri $Url -OutFile (Join-Path $ZIP_DIR "rustdesk-server-linux-$platform.zip")
     } else {
         Write-Host "Using cached file for $platform." -ForegroundColor Green
     }
 }
 
-foreach ($ZipFile in Get-ChildItem $CACHE_DIR) {
+foreach ($ZipFile in Get-ChildItem $ZIP_DIR) {
     Expand-Archive -Path $ZipFile -DestinationPath (Join-Path $BUILD_DIR "extracted") -Force
 }
 
