@@ -1,7 +1,11 @@
 # Native Synology Rustdesk Server Installer Builder
-Scripts for building rustdesk_server.spk for Synology NAS
+Scripts for building rustdesk_server.spk for Synology NAS.
 
-Images were extracted from 256x256 icon in Windows executable, added resized 72x72
+Images were extracted from 256x256 icon in Windows executable, added resized 72x72.
+
+Icon files also were created from 256x256 Windows executable icon.
+
+App window contains the server public key required for every connected Rustdesk client
 
 If id_ed25519 and id_ed25519.pub files are present, they will be packaged as well.
 
