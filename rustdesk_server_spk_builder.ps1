@@ -4,22 +4,32 @@ $STAGE_DIR = Join-Path $BUILD_DIR "stage"
 $CACHE_DIR = Join-Path $CURRENT_DIR ".cache"
 $RELEASE_DIR = Join-Path $CURRENT_DIR "release"
 $version = "1.1.16"
-$Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/rustdesk-server-linux-amd64.zip"
+$platforms = @("amd64", "arm64v8", "armv7", "i386")
+$arch = @{
+    amd64=@("V1000", "Geminilakenk", "Epyc7002", "Broadwellntbap", "V1000nk", "R1000nk", "Geminilake", "R1000", "Denverton", "Apollolake", "Avoton", "Bromolow", "Braswell", "Cedarview", "X86")
+    arm64v8=@("rtd1619b", "rtd1296", "armada37xx")
+    armv7=@("Armada38x", "Alpine", "Alpine4k", "Monaco", "Armada370", "Armadaxp", "Armada375", "Comcerto2k")
+    i386=@("Evansport")
+}
 
 New-Item -ItemType Directory -Path $RELEASE_DIR, $BUILD_DIR, $CACHE_DIR, (Join-Path $BUILD_DIR "conf"), (Join-Path $STAGE_DIR "bin"), (Join-Path $STAGE_DIR "data"), (Join-Path $BUILD_DIR "scripts"), (Join-Path $STAGE_DIR "ui"), (Join-Path $STAGE_DIR "ui" "images"), (Join-Path $STAGE_DIR "ui" "texts"), (Join-Path $STAGE_DIR "ui" "texts" "enu") -Force | Out-Null
 
-Write-Host "Downloading RustDesk Server $version ..." -ForegroundColor Cyan
-if (-Not (Test-Path (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip"))) {
-    Write-Host "Downloading from $Url ..." -ForegroundColor Yellow
-    Invoke-WebRequest -Uri $Url -OutFile (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip")
-} else {
-    Write-Host "Using cached file." -ForegroundColor Green
+foreach ($platform in $platforms) {
+    $Url = "https://github.com/rustdesk/rustdesk-server/releases/download/$version/rustdesk-server-linux-$platform.zip"
+    if (-Not (Test-Path (Join-Path $CACHE_DIR "rustdesk-server-linux-$platform.zip"))) {
+        Write-Host "Downloading from $Url ..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $Url -OutFile (Join-Path $CACHE_DIR "rustdesk-server-linux-$platform.zip")
+    } else {
+        Write-Host "Using cached file for $platform." -ForegroundColor Green
+    }
 }
-$ZipFile = Get-ChildItem (Join-Path $CACHE_DIR "rustdesk-server-linux-amd64.zip") | Select-Object -First 1 -ExpandProperty FullName
-Expand-Archive -Path $ZipFile -DestinationPath (Join-Path $BUILD_DIR "extracted") -Force
 
-$ArchDir = Get-ChildItem (Join-Path $BUILD_DIR "extracted") -Directory | Select-Object -First 1 -ExpandProperty FullName
-Move-Item (Join-Path $ArchDir "hbbs"), (Join-Path $ArchDir "hbbr") -Destination (Join-Path $STAGE_DIR "bin") -Force
+foreach ($ZipFile in Get-ChildItem $CACHE_DIR) {
+    Expand-Archive -Path $ZipFile -DestinationPath (Join-Path $BUILD_DIR "extracted") -Force
+}
+
+#$ArchDir = Get-ChildItem (Join-Path $BUILD_DIR "extracted") -Directory | Select-Object -First 1 -ExpandProperty FullName
+#Move-Item (Join-Path $ArchDir "hbbs"), (Join-Path $ArchDir "hbbr") -Destination (Join-Path $STAGE_DIR "bin") -Force
 
 if (Test-Path (Join-Path $CURRENT_DIR "id_ed25519")) { Copy-Item (Join-Path $CURRENT_DIR "id_ed25519") -Destination (Join-Path $STAGE_DIR "data") -Force }
 if (Test-Path (Join-Path $CURRENT_DIR "id_ed25519.pub")) { Copy-Item (Join-Path $CURRENT_DIR "id_ed25519.pub") -Destination (Join-Path $STAGE_DIR "data") -Force }
@@ -33,7 +43,7 @@ version="$version"
 os_min_ver="7.0-40000"
 displayname="RustDesk Server"
 description="Self-hosted open-source ID/Rendezvous and Relay server for RustDesk clients."
-arch="x86_64"
+arch="{model}"
 maintainer="Self"
 distributor="RustDesk Community"
 startable="yes"
@@ -42,7 +52,6 @@ thirdparty="yes"
 dsmuidir="ui"
 dsmappname="SYNOCOMMUNITY.RustDeskServer.AppInstance"
 "@
-[System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "INFO"), $InfoContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
 $PrivilegeContent = @"
 {
@@ -224,16 +233,28 @@ esac
 '@
 [System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "scripts" "start-stop-status"), $ScriptContent.Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
-Set-Location $STAGE_DIR
-tar -czf (Join-Path $BUILD_DIR "package.tgz") bin data ui
-Set-Location $BUILD_DIR
-$spkFiles = @("INFO", "conf", "package.tgz", "scripts")
-if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON.PNG")) { $spkFiles += "PACKAGE_ICON.PNG" }
-if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON_256.PNG")) { $spkFiles += "PACKAGE_ICON_256.PNG" }
-tar -cf (Join-Path $RELEASE_DIR "rustdesk_server.spk") $spkFiles
+$packageCounter = 0
+
+foreach ($platform in $platforms) {
+    $ArchDir = Join-Path $BUILD_DIR "extracted" $platform
+    Move-Item (Join-Path $ArchDir "hbbs"), (Join-Path $ArchDir "hbbr") -Destination (Join-Path $STAGE_DIR "bin") -Force
+    Set-Location $STAGE_DIR
+    tar -czf (Join-Path $BUILD_DIR "package.tgz") bin data ui
+    Set-Location $BUILD_DIR
+    $spkFiles = @("INFO", "conf", "package.tgz", "scripts")
+    if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON.PNG")) { $spkFiles += "PACKAGE_ICON.PNG" }
+    if (Test-Path (Join-Path $BUILD_DIR "PACKAGE_ICON_256.PNG")) { $spkFiles += "PACKAGE_ICON_256.PNG" }
+    foreach ($model in $arch[$platform]) {
+        [System.IO.File]::WriteAllText((Join-Path $BUILD_DIR "INFO"), $InfoContent.Replace("{model}", $model).Replace("`r`n", "`n"), (New-Object System.Text.UTF8Encoding($false)))
+        tar -cf (Join-Path $RELEASE_DIR "rustdesk_server_$model.spk") $spkFiles
+        $packageCounter++
+        Write-Host "Package for $model created." -ForegroundColor Green
+    }
+}
+
 Set-Location $CURRENT_DIR
 Remove-Item "$BUILD_DIR" -Recurse -Force
 
 Write-Host ""
-Write-Host "Success! Package created." -ForegroundColor Green
+Write-Host "Success! $packageCounter packages created." -ForegroundColor Green
 Write-Host ""
